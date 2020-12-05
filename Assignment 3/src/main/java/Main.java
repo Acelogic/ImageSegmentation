@@ -1,9 +1,11 @@
 
+import ij.ImagePlus;
 import ij.process.ColorProcessor;
+import ij.process.ImageProcessor;
 
 import javax.imageio.ImageIO;
-import java.awt.*;
-import java.awt.geom.Point2D;
+import javax.swing.*;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -12,45 +14,97 @@ import java.util.Collections;
 
 
 public class Main {
-    public static void main(String[] args) throws IOException, InterruptedException {
-        BufferedImage image = ImageIO.read(new File("test.jpg"));
 
+    BufferedImage image;
+    ArrayList<Edge> edgeList;
+    ColorProcessor colorProc;
+    int nrOfVertices;
+    float k;
+    double sigma;
+    int minCompSize;
+    DisjointSetForest forest;
 
-        ArrayList<Edge> edgeList = new ArrayList<>();
-        ColorProcessor c = new ColorProcessor(image);
-/*
-        for (int y = 0; y < image.getWidth(); y++) {
-            for (int x = 0; x < image.getHeight(); x++) {
+    public Main() throws IOException {
+        image = getImageFromPath();
+        ImagePlus imgPlus = new ImagePlus("Original", image);
+        edgeList = new ArrayList<>();
+        colorProc = new ColorProcessor(image);
+        nrOfVertices = image.getHeight() * image.getWidth();
+        forest = new DisjointSetForest(nrOfVertices);
+        k = 3200;
+        sigma = 0.65;
+        minCompSize = 50;
+        System.out.println("Number of Vertices: " + nrOfVertices);
+        generateEdgeGraph();
+        segmentImage();
+        imgPlus.show();
+        new ImagePlus( "Post Segmented", coloredProcessedImage()).show();
+        System.out.println("Displaying Image");
+    }
 
-                Point2D.Double vertCordinates = new Point2D.Double(x, y);
+    private BufferedImage getImageFromPath() throws IOException {
+        JFileChooser chooser = new JFileChooser();
+        FileNameExtensionFilter filter = new FileNameExtensionFilter("JPG,JPEG,PNG,", "jpg", "png", "jpeg");
+        chooser.setFileFilter(filter);
+        int returnVal = chooser.showOpenDialog(chooser);
+        String path = null;
+        if (returnVal == JFileChooser.APPROVE_OPTION) {
+            path = chooser.getSelectedFile().getPath();
+        }
+        File file = new File(path);
+        return ImageIO.read(file);
+    }
 
-                Color nodeAColor = c.getColor(x, y);
-
-                if ((x < image.getWidth() - 1) && (y < image.getHeight() - 1)) {
-                    Point2D.Double upperRightNeighbor = new Point2D.Double(x + 1, y + 1);
-                    edgeList.add(new Edge(vertCordinates, upperRightNeighbor, nodeAColor, c.getColor(x + 1, y + 1)));
-
-                }
-                if ((x < image.getWidth() - 1) && (y > 0)) {
-                    Point2D.Double lowerLeftNeighbor = new Point2D.Double(x + 1, y - 1);
-                    edgeList.add(new Edge(vertCordinates,lowerLeftNeighbor, nodeAColor, c.getColor(x + 1, y -1 )));
-                }
-
+    public void generateEdgeGraph() {
+        System.out.println("Generating Graph");
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                edgeList.addAll(new PixelVertex(x, y, colorProc).edgeList);
             }
         }
-*/
-
-        for (int y = 0; y < image.getWidth(); y++) {
-            for (int x = 0; x < image.getHeight(); x++) {
-                edgeList.addAll(new PixelVertex(x, y, c).edgeList);
-            }
-        }
-
-        System.out.println(edgeList.size());
-
         Collections.sort(edgeList);
+        System.out.println("Number of Edges Size: " + edgeList.size());
+    }
 
-        System.out.println();
+    public void segmentImage() {
+        System.out.println("Segmenting Image");
+        forest.segmentGraph(edgeList, k);
+        for (Edge e : edgeList) {
+            int a = forest.find(e.getBeginNode1D());
+            int b = forest.find(e.getEndNode1D());
+            if ((a != b) && ((forest.sizeOfComponent(a) < minCompSize) || (forest.sizeOfComponent(b) < minCompSize))) {
+                forest.join(a, b);
+            }
+        }
+    }
+
+
+    public ImageProcessor coloredProcessedImage() {
+        System.out.println("Generating Color Processed Preview");
+        ColorProcessor result = (ColorProcessor) colorProc.duplicate();
+        int[][] randomColorPool = getRandom3ColorsAndCycle(image.getWidth() * image.getHeight());
+        for (int y = 0; y < image.getHeight(); y++) {
+            for (int x = 0; x < image.getWidth(); x++) {
+                int component = forest.find(y * image.getWidth() + x);
+                result.putPixel(x, y, randomColorPool[component]);
+            }
+        }
+        result.blurGaussian(sigma);
+        return result;
+    }
+
+    public int[][] getRandom3ColorsAndCycle(int num) {
+        int[][] returnInt = new int[num][3];
+        for (int i = 0; i < num; i++) {
+            for (int j = 0; j < 3; j++) {
+                returnInt[i][j] = (int) (Math.random() * 255);
+            }
+        }
+        return returnInt;
+    }
+
+    public static void main(String[] args) throws IOException, InterruptedException {
+        Main m = new Main();
 
     }
 }
