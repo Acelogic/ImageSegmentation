@@ -1,6 +1,7 @@
 
 import ij.ImagePlus;
 import ij.process.ColorProcessor;
+import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 
 import javax.imageio.ImageIO;
@@ -14,32 +15,55 @@ import java.util.Collections;
 
 
 public class Main {
+    public static final String ANSI_RESET = "\u001B[0m";
+    public static final String ANSI_BLACK = "\u001B[30m";
+    public static final String ANSI_RED = "\u001B[31m";
+    public static final String ANSI_GREEN = "\u001B[32m";
+    public static final String ANSI_YELLOW = "\u001B[33m";
+    public static final String ANSI_BLUE = "\u001B[34m";
+    public static final String ANSI_PURPLE = "\u001B[35m";
+    public static final String ANSI_CYAN = "\u001B[36m";
+    public static final String ANSI_WHITE = "\u001B[37m";
 
     BufferedImage image;
     ArrayList<Edge> edgeList;
-    ColorProcessor colorProc;
+    ColorProcessor colorProcPost;
     int nrOfVertices;
-    float k;
-    double sigma;
+    float thresholdKValue;
+    double GaussBlurSigmaFactor;
     int minCompSize;
     DisjointSetForest forest;
 
     public Main() throws IOException {
-        image = getImageFromPath();
-        ImagePlus imgPlus = new ImagePlus("Original", image);
+        thresholdKValue = 1500;
+        GaussBlurSigmaFactor = 1;
+        minCompSize = 5;
+
+        // Flower Image k = 1500 , blur = 1 , minComp = 5
+
+        // Blurring the original image before the segmentation
+        BufferedImage originalImage = getImageFromPath();
+        ColorProcessor before = new ColorProcessor(originalImage);
+        before.blurGaussian(GaussBlurSigmaFactor);
+        ImagePlus imgPlus = new ImagePlus("Original", before);
+        // Exporting the result of the blurred image back to a buffered image
+        image = before.getBufferedImage();
+
+
         edgeList = new ArrayList<>();
-        colorProc = new ColorProcessor(image);
         nrOfVertices = image.getHeight() * image.getWidth();
+
+        // Blurred buffered Image is set to be processed
+        colorProcPost = new ColorProcessor(image);
         forest = new DisjointSetForest(nrOfVertices);
-        k = 3200;
-        sigma = 0.65;
-        minCompSize = 50;
-        System.out.println("Number of Vertices: " + nrOfVertices);
+
+
+        System.out.println(ANSI_YELLOW + "Number of Vertices: " + ANSI_RESET + nrOfVertices);
         generateEdgeGraph();
         segmentImage();
         imgPlus.show();
-        new ImagePlus( "Post Segmented", coloredProcessedImage()).show();
-        System.out.println("Displaying Image");
+        new ImagePlus("Post Segmented", coloredProcessedImage()).show();
+        System.out.println(ANSI_RED + "Displaying Post Processed Image");
     }
 
     private BufferedImage getImageFromPath() throws IOException {
@@ -56,19 +80,19 @@ public class Main {
     }
 
     public void generateEdgeGraph() {
-        System.out.println("Generating Graph");
+        System.out.println(ANSI_YELLOW + "Generating Graph" + ANSI_RESET);
         for (int y = 0; y < image.getHeight(); y++) {
             for (int x = 0; x < image.getWidth(); x++) {
-                edgeList.addAll(new PixelVertex(x, y, colorProc).edgeList);
+                edgeList.addAll(new PixelVertex(x, y, colorProcPost).getEdgeList());
             }
         }
         Collections.sort(edgeList);
-        System.out.println("Number of Edges Size: " + edgeList.size());
+        System.out.println(ANSI_YELLOW + "Number of Edges Size: " + ANSI_RESET + edgeList.size());
     }
 
     public void segmentImage() {
-        System.out.println("Segmenting Image");
-        forest.segmentGraph(edgeList, k);
+        System.out.println("\n"+ANSI_RED + "Segmenting Image" + ANSI_RESET);
+        forest.segmentGraph(edgeList, thresholdKValue);
         for (Edge e : edgeList) {
             int a = forest.find(e.getBeginNode1D());
             int b = forest.find(e.getEndNode1D());
@@ -80,16 +104,15 @@ public class Main {
 
 
     public ImageProcessor coloredProcessedImage() {
-        System.out.println("Generating Color Processed Preview");
-        ColorProcessor result = (ColorProcessor) colorProc.duplicate();
+        System.out.println(ANSI_RED + "Generating Color Processed Preview" + ANSI_RESET);
+        ColorProcessor result = (ColorProcessor) colorProcPost.duplicate();
         int[][] randomColorPool = getRandom3ColorsAndCycle(image.getWidth() * image.getHeight());
         for (int y = 0; y < image.getHeight(); y++) {
             for (int x = 0; x < image.getWidth(); x++) {
-                int component = forest.find(y * image.getWidth() + x);
+                int component = forest.find( x + y * image.getWidth());
                 result.putPixel(x, y, randomColorPool[component]);
             }
         }
-        result.blurGaussian(sigma);
         return result;
     }
 

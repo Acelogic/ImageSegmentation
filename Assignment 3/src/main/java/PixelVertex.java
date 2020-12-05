@@ -13,8 +13,8 @@ public class PixelVertex {
     private Color color;
     private Point2D.Double vertCordinates;
     private ColorProcessor proc;
-    static BufferedImage image;
-    ArrayList<Edge> edgeList;
+    private static BufferedImage image;
+    private ArrayList<Edge> edgeList;
 
     public PixelVertex(int x, int y, ColorProcessor proc) {
         this.x = x;
@@ -47,6 +47,11 @@ public class PixelVertex {
             Point2D.Double lowerRightCornerNeighbor = new Point2D.Double(x + 1, y - 1);
             edgeList.add(new Edge(this.vertCordinates, lowerRightCornerNeighbor, this.color, proc.getColor(x + 1, y - 1), image));
         }
+    }
+
+
+    public ArrayList<Edge> getEdgeList() {
+        return edgeList;
     }
 
     @Override
